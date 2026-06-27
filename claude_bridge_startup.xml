@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!--
+  Windows Task Scheduler - Claude Bridge Auto Start
+  ==================================================
+  SETUP:
+  1. Ganti YOUR_USERNAME dengan username Windows kamu
+  2. Sesuaikan path claude_bridge.py jika berbeda
+  3. Import via PowerShell (Run as Administrator):
+     Register-ScheduledTask -Xml (Get-Content "claude_bridge_startup.xml" -Raw) -TaskName "ClaudeBridgeServer" -Force
+  4. Verifikasi:
+     Get-ScheduledTask -TaskName "ClaudeBridgeServer"
+-->
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Auto-start Claude Bridge Server untuk YouTube Auto Reply N8N Pipeline</Description>
+    <Author>YOUR_USERNAME</Author>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <!-- Delay 30 detik setelah login sebelum server dijalankan -->
+      <Delay>PT30S</Delay>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <!-- Jangan jalankan ulang jika sudah ada instance yang berjalan -->
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <!-- Tidak ada time limit untuk execution -->
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <!-- Auto restart jika crash, maksimal 3x dengan interval 1 menit -->
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>3</Count>
+    </RestartOnFailure>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions>
+    <Exec>
+      <!-- GANTI YOUR_USERNAME dengan username Windows kamu -->
+      <Command>python</Command>
+      <Arguments>"C:\Users\YOUR_USERNAME\claude_bridge.py"</Arguments>
+      <WorkingDirectory>C:\Users\YOUR_USERNAME</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

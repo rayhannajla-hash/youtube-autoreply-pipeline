@@ -1,0 +1,241 @@
+{
+  "name": "YouTube Auto Reply - Claude Code",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111101",
+      "name": "Setiap 1 Jam",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/youtube/v3/commentThreads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet"
+            },
+            {
+              "name": "allThreadsRelatedToChannelId",
+              "value": "YOUR_YOUTUBE_CHANNEL_ID"
+            },
+            {
+              "name": "maxResults",
+              "value": "50"
+            },
+            {
+              "name": "order",
+              "value": "time"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-1111-1111-111111111102",
+      "name": "Get YouTube Comments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "YOUR_N8N_YOUTUBE_CREDENTIAL_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "replied_comments",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-1111-1111-111111111103",
+      "name": "Baca Sheet Sudah Dibalas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [620, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_N8N_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// Filter komentar yang belum dibalas\n// dan sanitize teks untuk dikirim ke Claude\n// ============================================\n\nconst ytResponse = $('Get YouTube Comments').first().json;\nconst ytItems = ytResponse.items || [];\n\nconst sheetsItems = $('Baca Sheet Sudah Dibalas').all();\nconst repliedIds = sheetsItems\n  .map(i => i.json.commentId)\n  .filter(Boolean);\n\nconst unreplied = ytItems.filter(item => !repliedIds.includes(item.id));\n\nif (unreplied.length === 0) {\n  console.log('Tidak ada komentar baru.');\n  return [];\n}\n\nconsole.log(`Ditemukan ${unreplied.length} komentar baru.`);\n\nreturn unreplied.map(item => {\n  const rawText = item.snippet?.topLevelComment?.snippet?.textDisplay || '';\n  const sanitizedComment = rawText\n    .replace(/\"/g, \"'\")\n    .replace(/\\n|\\r/g, ' ')\n    .replace(/\\\\/g, '/')\n    .trim()\n    .substring(0, 400);\n\n  const rawAuthor = item.snippet?.topLevelComment?.snippet?.authorDisplayName || 'Penonton';\n  const sanitizedAuthor = rawAuthor.replace(/\"/g, \"'\").trim();\n\n  // Sesuaikan prompt di bawah dengan tone channel kamu\n  const prompt = `Kamu adalah admin channel YouTube yang ramah dan informatif. Balas komentar dari ${sanitizedAuthor} dalam Bahasa Indonesia, maksimal 3 kalimat, natural dan engaging. Jangan terlalu formal. Langsung tulis balasannya saja tanpa tanda kutip.\\n\\nKomentar: ${sanitizedComment}`;\n\n  return {\n    json: {\n      commentId: item.id,\n      videoId: item.snippet?.videoId || '',\n      authorName: sanitizedAuthor,\n      commentText: sanitizedComment,\n      prompt: prompt\n    }\n  };\n});"
+      },
+      "id": "11111111-1111-1111-1111-111111111104",
+      "name": "Filter dan Sanitize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8765/reply",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-1111-1111-111111111105",
+      "name": "Generate Reply Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1060, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bersihkan output Claude dan gabungkan dengan data komentar\nconst bridgeResponse = $input.first().json;\nconst replyText = (bridgeResponse.reply || '').trim().replace(/^\"|\"$/g, '').trim();\n\nconst commentData = $('Filter dan Sanitize').item.json;\n\nif (!replyText) {\n  console.log('Warning: reply kosong untuk commentId:', commentData.commentId);\n}\n\nreturn [{\n  json: {\n    commentId: commentData.commentId,\n    videoId: commentData.videoId,\n    authorName: commentData.authorName,\n    commentText: commentData.commentText,\n    replyText: replyText || 'Terima kasih atas komentarnya! 😊'\n  }\n}];"
+      },
+      "id": "11111111-1111-1111-1111-111111111106",
+      "name": "Bersihkan Output Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1280, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/youtube/v3/comments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ snippet: { parentId: $json.commentId, textOriginal: $json.replyText } }) }}",
+        "options": {}
+      },
+      "id": "11111111-1111-1111-1111-111111111107",
+      "name": "Post Reply ke YouTube",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 300],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "YOUR_N8N_YOUTUBE_CREDENTIAL_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "replied_comments",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "commentId": "={{ $json.commentId }}",
+            "timestamp": "={{ $now.toISO() }}",
+            "videoId": "={{ $json.videoId }}",
+            "commentText": "={{ $json.commentText }}",
+            "replyText": "={{ $json.replyText }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-1111-1111-111111111108",
+      "name": "Catat ke Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1720, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_N8N_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Setiap 1 Jam": {
+      "main": [
+        [{"node": "Get YouTube Comments", "type": "main", "index": 0}]
+      ]
+    },
+    "Get YouTube Comments": {
+      "main": [
+        [{"node": "Baca Sheet Sudah Dibalas", "type": "main", "index": 0}]
+      ]
+    },
+    "Baca Sheet Sudah Dibalas": {
+      "main": [
+        [{"node": "Filter dan Sanitize", "type": "main", "index": 0}]
+      ]
+    },
+    "Filter dan Sanitize": {
+      "main": [
+        [{"node": "Generate Reply Claude", "type": "main", "index": 0}]
+      ]
+    },
+    "Generate Reply Claude": {
+      "main": [
+        [{"node": "Bersihkan Output Claude", "type": "main", "index": 0}]
+      ]
+    },
+    "Bersihkan Output Claude": {
+      "main": [
+        [{"node": "Post Reply ke YouTube", "type": "main", "index": 0}]
+      ]
+    },
+    "Post Reply ke YouTube": {
+      "main": [
+        [{"node": "Catat ke Google Sheets", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
