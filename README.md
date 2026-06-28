@@ -77,7 +77,7 @@ Pipeline otomasi yang berjalan setiap 1 jam untuk membalas komentar YouTube seca
 youtube-autoreply/
 ├── claude_bridge.py           # Python bridge server (N8N → Claude CLI)
 ├── claude_bridge_startup.xml  # Windows Task Scheduler config (auto-start)
-├── youtube_autoreply_v2.json  # N8N workflow (importable)
+├── youtube_autoreply_workflow.json  # N8N workflow (importable)
 └── README.md
 ```
 
@@ -146,7 +146,7 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8765/reply" `
 
 ### 4. N8N Setup
 
-1. Import `youtube_autoreply_v2.json` ke N8N
+1. Import `youtube_autoreply_workflow.json` ke N8N
 2. Setup credentials:
    - **YouTube OAuth2** → OAuth2 API (generic) → isi Client ID, Secret, Refresh Token
    - **Google Sheets** → Google Sheets OAuth2 API → Sign in with Google
